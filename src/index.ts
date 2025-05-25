@@ -156,6 +156,84 @@ server.tool(
   },
 );
 
+// タスクステータス更新ツール
+server.tool(
+  "update_task_status",
+  "タスク一件のステータスを更新する",
+  {
+    id: z.number().int().positive("タスクIDは正の整数で指定してください"),
+    status: z.enum(["ToDo", "InProgress", "Done"], {
+      errorMap: () => ({ message: "ステータスは「ToDo」「InProgress」「Done」のいずれかを指定してください" })
+    })
+  },
+  async (args, _extra) => {
+    try {
+      console.error(`タスクID: ${args.id} のステータスを「${args.status}」に更新します...`);
+      
+      // 更新前のタスク情報を取得
+      const getResp = await fetch(`http://localhost:5001/api/tasks/${args.id}`);
+      
+      if (!getResp.ok) {
+        if (getResp.status === 404) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: `ID: ${args.id} のタスクは見つかりませんでした。`
+            }]
+          };
+        }
+        throw new Error(`APIエラー: ${getResp.status}`);
+      }
+      
+      const currentTask = await getResp.json();
+      console.error("現在のタスク:", JSON.stringify(currentTask));
+      
+      // ステータスの更新のみを行うためのデータを作成
+      const updateData = {
+        title: currentTask.title,
+        description: currentTask.description,
+        status: args.status
+      };
+      
+      console.error("更新データ:", JSON.stringify(updateData));
+      
+      // タスクを更新
+      const updateResp = await fetch(`http://localhost:5001/api/tasks/${args.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(updateData)
+      });
+      
+      if (!updateResp.ok) {
+        throw new Error(`APIエラー: ${updateResp.status}`);
+      }
+      
+      const updatedTask = await updateResp.json();
+      console.error("タスク更新成功:", JSON.stringify(updatedTask));
+      
+      const result = {
+        content: [{
+          type: "text" as const,
+          text: `タスクのステータスを更新しました：\nID: ${updatedTask.id}\nタイトル: ${updatedTask.title}\n説明: ${updatedTask.description}\n状態: ${updatedTask.status}`
+        }]
+      };
+      
+      console.error("レスポンス:", JSON.stringify(result));
+      return result;
+    } catch (error) {
+      console.error("タスクステータス更新エラー:", error);
+      return {
+        content: [{
+          type: "text" as const,
+          text: `タスクのステータス更新に失敗しました: ${error instanceof Error ? error.message : String(error)}`
+        }]
+      };
+    }
+  },
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
